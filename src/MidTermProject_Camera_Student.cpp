@@ -62,7 +62,14 @@ int main(int argc, const char *argv[])
         // push image into data frame buffer
         DataFrame frame;
         frame.cameraImg = imgGray;
-        dataBuffer.push_back(frame);
+        uint current_index = imgIndex % dataBufferSize;
+
+        if (dataBuffer.size() < dataBufferSize) {
+            // so that I do not need to reserve dataBufferSize space.
+            dataBuffer.push_back(frame);
+        } else {
+            dataBuffer[current_index] = frame;
+        }
 
         //// EOF STUDENT ASSIGNMENT
         cout << "#1 : LOAD IMAGE INTO BUFFER done" << endl;
@@ -78,7 +85,7 @@ int main(int argc, const char *argv[])
         /// selection based on detectorType
         //// -> HARRIS, FAST, BRISK, ORB, AKAZE, SIFT
 
-        if (detectorType.compare("SHITOMASI") == 0)
+        if (detectorType == "SHITOMASI")
         {
             detKeypointsShiTomasi(keypoints, imgGray, false);
         }
@@ -116,7 +123,7 @@ int main(int argc, const char *argv[])
         }
 
         // push keypoints and descriptor for current frame to end of data buffer
-        (dataBuffer.end() - 1)->keypoints = keypoints;
+        dataBuffer[current_index].keypoints = keypoints;
         cout << "#2 : DETECT KEYPOINTS done" << endl;
 
         /* EXTRACT KEYPOINT DESCRIPTORS */
@@ -128,17 +135,19 @@ int main(int argc, const char *argv[])
 
         cv::Mat descriptors;
         string descriptorType = "BRISK"; // BRIEF, ORB, FREAK, AKAZE, SIFT
-        descKeypoints((dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->cameraImg, descriptors,
+        descKeypoints(dataBuffer[current_index].keypoints,
+                      dataBuffer[current_index].cameraImg, descriptors,
                       descriptorType);
         //// EOF STUDENT ASSIGNMENT
 
         // push descriptors for current frame to end of data buffer
-        (dataBuffer.end() - 1)->descriptors = descriptors;
+        dataBuffer[current_index].descriptors = descriptors;
 
         cout << "#3 : EXTRACT DESCRIPTORS done" << endl;
 
         if (dataBuffer.size() > 1) // wait until at least two images have been processed
         {
+            uint last_index = (imgIndex - 1) % dataBufferSize;
 
             /* MATCH KEYPOINT DESCRIPTORS */
 
@@ -152,14 +161,14 @@ int main(int argc, const char *argv[])
             //// TASK MP.6 -> add KNN match selection and perform descriptor distance ratio filtering with
             /// t=0.8 in file matching2D.cpp
 
-            matchDescriptors((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints,
-                             (dataBuffer.end() - 2)->descriptors, (dataBuffer.end() - 1)->descriptors,
+            matchDescriptors(dataBuffer[last_index].keypoints, dataBuffer[current_index].keypoints,
+                             dataBuffer[last_index].descriptors, dataBuffer[current_index].descriptors,
                              matches, descriptorType, matcherType, selectorType);
 
             //// EOF STUDENT ASSIGNMENT
 
             // store matches in current data frame
-            (dataBuffer.end() - 1)->kptMatches = matches;
+            dataBuffer[current_index].kptMatches = matches;
 
             cout << "#4 : MATCH KEYPOINT DESCRIPTORS done" << endl;
 
@@ -167,9 +176,9 @@ int main(int argc, const char *argv[])
             bVis = true;
             if (bVis)
             {
-                cv::Mat matchImg = ((dataBuffer.end() - 1)->cameraImg).clone();
-                cv::drawMatches((dataBuffer.end() - 2)->cameraImg, (dataBuffer.end() - 2)->keypoints,
-                                (dataBuffer.end() - 1)->cameraImg, (dataBuffer.end() - 1)->keypoints,
+                cv::Mat matchImg = (dataBuffer[current_index].cameraImg).clone();
+                cv::drawMatches(dataBuffer[last_index].cameraImg, dataBuffer[last_index].keypoints,
+                                dataBuffer[current_index].cameraImg, dataBuffer[current_index].keypoints,
                                 matches, matchImg,
                                 cv::Scalar::all(-1), cv::Scalar::all(-1),
                                 vector<char>(), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
