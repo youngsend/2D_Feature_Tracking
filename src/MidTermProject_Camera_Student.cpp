@@ -19,6 +19,10 @@
 /* MAIN PROGRAM */
 int main(int argc, const char *argv[])
 {
+    std::string detectorType = "ORB";
+    std::string descriptorType = "ORB"; // BRIEF, ORB, FREAK, AKAZE, SIFT
+    std::string matcherType = "MAT_FLANN";        // MAT_BF, MAT_FLANN
+    std::string selectorType = "SEL_KNN";       // SEL_NN, SEL_KNN
 
     /* INIT VARIABLES AND DATA STRUCTURES */
     Matching2D matching2D;
@@ -37,7 +41,6 @@ int main(int argc, const char *argv[])
     // misc
     int dataBufferSize = 2;       // no. of images which are held in memory (ring buffer) at the same time
     std::vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
-    bool bVis = false;            // visualize results
 
     /* MAIN LOOP OVER ALL IMAGES */
 
@@ -75,7 +78,6 @@ int main(int argc, const char *argv[])
 
         // extract 2D keypoints from current image
         std::vector<cv::KeyPoint> keypoints; // create empty feature list for current image
-        std::string detectorType = "ORB";
 
         //// TASK MP.2 -> add the following keypoint detectors in file matching2D.cpp and enable string-based
         /// selection based on detectorType
@@ -94,8 +96,9 @@ int main(int argc, const char *argv[])
         // only keep keypoints on the preceding vehicle
         bool bFocusOnVehicle = true;
         cv::Rect vehicleRect(535, 180, 180, 150);
+        // this cropping should be disabled finally when fusing with lidar point cloud.
         matching2D.CropKeypoints(vehicleRect, keypoints);
-        matching2D.DisplayKeypoints(keypoints, img, detectorType);
+//        matching2D.DisplayKeypoints(keypoints, img, detectorType);
 
         // optional : limit number of keypoints (helpful for debugging and learning)
         bool bLimitKpts = false;
@@ -121,7 +124,6 @@ int main(int argc, const char *argv[])
         //// -> BRIEF, ORB, FREAK, AKAZE, SIFT
 
         cv::Mat descriptors;
-        std::string descriptorType = "BRISK"; // BRIEF, ORB, FREAK, AKAZE, SIFT
         matching2D.DescKeypoints(dataBuffer[current_index].keypoints,
                                  dataBuffer[current_index].cameraImg, descriptors,
                                  descriptorType);
@@ -138,17 +140,25 @@ int main(int argc, const char *argv[])
             /* MATCH KEYPOINT DESCRIPTORS */
 
             std::vector<cv::DMatch> matches;
-            std::string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
-            std::string descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
-            std::string selectorType = "SEL_NN";       // SEL_NN, SEL_KNN
+            std::string binaryOrHogDescriptor;
+            if (descriptorType == "BRISK" ||
+                descriptorType == "BRIEF" ||
+                descriptorType == "ORB" ||
+                descriptorType == "FREAK" ||
+                descriptorType == "AKAZE") {
+                binaryOrHogDescriptor = "DES_BINARY";
+            } else {
+                binaryOrHogDescriptor = "DES_HOG";
+            }
 
             //// TASK MP.5 -> add FLANN matching in file matching2D.cpp
             //// TASK MP.6 -> add KNN match selection and perform descriptor distance ratio filtering with
             /// t=0.8 in file matching2D.cpp
 
             matching2D.MatchDescriptors(dataBuffer[last_index].keypoints, dataBuffer[current_index].keypoints,
-                                        dataBuffer[last_index].descriptors, dataBuffer[current_index].descriptors,
-                                        matches, descriptorType, matcherType, selectorType);
+                                        dataBuffer[last_index].descriptors,
+                                        dataBuffer[current_index].descriptors,
+                                        matches, binaryOrHogDescriptor, matcherType, selectorType);
 
             // store matches in current data frame
             dataBuffer[current_index].kptMatches = matches;
@@ -156,7 +166,7 @@ int main(int argc, const char *argv[])
             std::cout << "#4 : MATCH KEYPOINT DESCRIPTORS done\n";
 
             // visualize matches between current and previous image
-//            matching2D.DisplayMatches(dataBuffer[current_index], dataBuffer[last_index], matches);
+            matching2D.DisplayMatches(dataBuffer[current_index], dataBuffer[last_index], matches);
         }
 
     } // eof loop over all images
