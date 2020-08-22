@@ -5,10 +5,10 @@
 #include <string>
 
 // Find best matches for keypoints in two camera images based on several matching methods
-void matchDescriptors(std::vector<cv::KeyPoint> &kPtsSource, std::vector<cv::KeyPoint> &kPtsRef,
-                      cv::Mat &descSource, cv::Mat &descRef,
-                      std::vector<cv::DMatch> &matches, std::string descriptorType,
-                      std::string matcherType, std::string selectorType)
+void Matching2D::MatchDescriptors(std::vector<cv::KeyPoint> &kPtsSource, std::vector<cv::KeyPoint> &kPtsRef,
+                                  cv::Mat &descSource, cv::Mat &descRef,
+                                  std::vector<cv::DMatch> &matches, std::string descriptorType,
+                                  std::string matcherType, std::string selectorType)
 {
     // configure matcher
     bool crossCheck = false;
@@ -38,7 +38,7 @@ void matchDescriptors(std::vector<cv::KeyPoint> &kPtsSource, std::vector<cv::Key
 }
 
 // Use one of several types of state-of-art descriptors to uniquely identify keypoints
-void descKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descriptors, std::string descriptorType)
+void Matching2D::DescKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descriptors, std::string descriptorType)
 {
     // select appropriate descriptor
     cv::Ptr<cv::DescriptorExtractor> extractor;
@@ -62,7 +62,7 @@ void descKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &
 }
 
 // Detect keypoints in image using the traditional Shi-Thomasi detector
-void detKeypointsShiTomasi(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool bVis)
+void Matching2D::DetKeypointsShiTomasi(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img)
 {
     // compute detector parameters based on image size
     //  size of an average block for computing a derivative covariation matrix over each pixel neighborhood
@@ -90,21 +90,9 @@ void detKeypointsShiTomasi(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, b
     }
     t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
     std::cout << "Shi-Tomasi detection with n=" << keypoints.size() << " keypoints in " << 1000 * t / 1.0 << " ms\n";
-
-    // visualize results
-    if (bVis)
-    {
-        cv::Mat visImage = img.clone();
-        cv::drawKeypoints(img, keypoints, visImage, cv::Scalar::all(-1),
-                          cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-        std::string windowName = "Shi-Tomasi Corner Detector Results";
-        cv::namedWindow(windowName, 5);
-        imshow(windowName, visImage);
-        cv::waitKey(0);
-    }
 }
 
-void detKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool bVis) {
+void Matching2D::DetKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img) {
     // Detector parameters
     int blockSize = 2;     // for every pixel, a blockSize × blockSize neighborhood is considered
     int apertureSize = 3;  // aperture parameter for Sobel operator (must be odd)
@@ -156,17 +144,6 @@ void detKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool
             }
         } // eof loop over cols
     }     // eof loop over rows
-
-    // visualize keypoints
-    if (bVis) {
-        std::string windowName = "Harris Corner Detection Results";
-        cv::namedWindow(windowName, 5);
-        cv::Mat visImage = img.clone();
-        cv::drawKeypoints(img, keypoints, visImage, cv::Scalar::all(-1),
-                          cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-        cv::imshow(windowName, visImage);
-        cv::waitKey(0);
-    }
 }
 
 /**
@@ -178,7 +155,8 @@ void detKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, bool
  * @param detectorType
  * @param bVis
  */
-void detKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, std::string detectorType, bool bVis){
+void Matching2D::DetKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img,
+                                    const std::string& detectorType){
     cv::Ptr<cv::Feature2D> detector;
     if (detectorType == "FAST") {
         // difference between intensity of the central pixel and pixels of a circle around this pixel
@@ -228,14 +206,36 @@ void detKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, std:
     detector->detect(img, keypoints);
     t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
     std::cout << detectorType << " with n= " << keypoints.size() << " keypoints in " << 1000 * t / 1.0 << " ms\n";
+}
 
-    if (bVis) {
-        cv::Mat visImage = img.clone();
-        cv::drawKeypoints(img, keypoints, visImage, cv::Scalar::all(-1),
-                          cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
-        std::string windowName = detectorType + " Detection Results";
-        cv::namedWindow(windowName, 5);
-        imshow(windowName, visImage);
-        cv::waitKey(0);
-    }
+void Matching2D::DisplayKeypoints(std::vector<cv::KeyPoint>& keypoints, cv::Mat& img, const std::string& detectorType){
+    cv::Mat visImage = img.clone();
+    cv::drawKeypoints(img, keypoints, visImage, cv::Scalar::all(-1),
+                      cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+    std::string windowName = detectorType + " Detection Results";
+    cv::namedWindow(windowName, 5);
+    imshow(windowName, visImage);
+    cv::waitKey(0);
+}
+
+void
+Matching2D::DisplayMatches(const DataFrame &current, const DataFrame &last, const std::vector<cv::DMatch> &matches) {
+    cv::Mat matchImg = (current.cameraImg).clone();
+    cv::drawMatches(last.cameraImg, last.keypoints,
+                    current.cameraImg, current.keypoints,
+                    matches, matchImg,
+                    cv::Scalar::all(-1), cv::Scalar::all(-1),
+                    std::vector<char>(), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+
+    std::string windowName = "Matching keypoints between two camera images";
+    cv::namedWindow(windowName, 7);
+    cv::imshow(windowName, matchImg);
+    cv::waitKey(0); // wait for key to be pressed
+}
+
+void Matching2D::CropKeypoints(const cv::Rect &rect, std::vector<cv::KeyPoint> &keypoints) {
+    // remove the keypoint from keypoints if rect does not contain it.
+    keypoints.erase(std::remove_if(keypoints.begin(), keypoints.end(),
+                                   [&](const cv::KeyPoint& keyPoint){return !rect.contains(keyPoint.pt);}),
+                    keypoints.end());
 }
