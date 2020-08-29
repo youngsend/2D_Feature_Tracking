@@ -90,6 +90,7 @@ int main(int argc, const char *argv[])
         //// -> HARRIS, FAST, BRISK, ORB, AKAZE, SIFT
 
         matching2D.DetectKeypoints(keypoints, imgGray);
+//        matching2D.DisplayKeypoints(keypoints, img);
 
         //// TASK MP.3 -> only keep keypoints on the preceding vehicle
 

@@ -302,4 +302,25 @@ void Matching2D::DetectKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &
     } else {
         DetKeypointsModern(keypoints, img);
     }
+//    CalculateNeighborhoodDistribution(keypoints);
+}
+
+void Matching2D::CalculateNeighborhoodDistribution(const std::vector<cv::KeyPoint> &keypoints) {
+    std::vector<float> neighborhoods;
+    for(auto& keypoint : keypoints){
+        neighborhoods.push_back(keypoint.size);
+    }
+
+    float sum = std::accumulate(neighborhoods.begin(), neighborhoods.end(), 0.0f);
+    float mean = sum / neighborhoods.size();
+
+    std::vector<float> diff(neighborhoods.size());
+    std::transform(neighborhoods.begin(), neighborhoods.end(), diff.begin(),
+                   [mean](float x){
+                       return x - mean;
+                   });
+    float sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0f);
+    float stdev = std::sqrt(sq_sum / diff.size());
+
+    std::cout << detectorType << " Mean: " << mean << ", Std: " << stdev << "\n";
 }
