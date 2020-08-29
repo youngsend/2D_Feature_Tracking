@@ -8,6 +8,7 @@
 #include <vector>
 #include <cmath>
 #include <limits>
+#include <fstream>
 
 #include <opencv2/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -20,26 +21,38 @@
 
 class Matching2D {
 public:
-    Matching2D() = default;
+    explicit Matching2D(std::string detectorType = "ORB",
+                        std::string descriptorType = "ORB",
+                        std::string matcherType = "MAT_BF",
+                        std::string selectorType = "SEL_KNN");
     ~Matching2D() = default;
 
     // keypoint detector
-    void DetKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img);
-    void DetKeypointsShiTomasi(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img);
-    void DetKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, const std::string& detectorType);
+    void DetectKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img);
 
     // keypoint descriptor
-    void DescKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descriptors,
-                       const std::string& descriptorType);
+    void DescKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descriptors);
     void MatchDescriptors(std::vector<cv::KeyPoint> &kPtsSource, std::vector<cv::KeyPoint> &kPtsRef,
                           cv::Mat &descSource, cv::Mat &descRef,
-                          std::vector<cv::DMatch> &matches, const std::string& descriptorType,
-                          const std::string& matcherType, const std::string& selectorType);
+                          std::vector<cv::DMatch> &matches);
 
     // helper functions
-    void DisplayKeypoints(std::vector<cv::KeyPoint>& keypoints, cv::Mat& img, const std::string& detectorType);
+    void DisplayKeypoints(std::vector<cv::KeyPoint>& keypoints, cv::Mat& img);
     void DisplayMatches(const DataFrame& current, const DataFrame& last, const std::vector<cv::DMatch>& matches);
     void CropKeypoints(const cv::Rect& rect, std::vector<cv::KeyPoint>& keypoints);
+
+private:
+    void DetKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img);
+    void DetKeypointsShiTomasi(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img);
+    void DetKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img);
+
+private:
+    std::ofstream outputCSV;
+    std::string detectorType;
+    std::string descriptorType;
+    std::string matcherType;
+    std::string selectorType;
+    std::string descriptorBigType;
 };
 
 #endif /* matching2D_hpp */

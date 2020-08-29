@@ -4,26 +4,49 @@
 #include <vector>
 #include <string>
 
+Matching2D::Matching2D(std::string detectorType, std::string descriptorType, std::string matcherType,
+                       std::string selectorType) :
+        detectorType(std::move(detectorType)),
+        descriptorType(std::move(descriptorType)),
+        matcherType(std::move(matcherType)),
+        selectorType(std::move(selectorType)){
+    // output to csv
+    std::string csv_path = "../csv/";
+    std::string csv_name = Matching2D::detectorType + "_" + Matching2D::descriptorType + ".csv";
+    outputCSV.open(csv_path + csv_name);
+    outputCSV << "keypoints number, detection time(ms), descriptor extraction time(ms), matches number\n";
+
+    // decide whether the descriptor is binary or hog, needed in MatchDescriptors.
+    if (descriptorType == "BRISK" ||
+        descriptorType == "BRIEF" ||
+        descriptorType == "ORB" ||
+        descriptorType == "FREAK" ||
+        descriptorType == "AKAZE") {
+        descriptorBigType = "DES_BINARY";
+    } else {
+        descriptorBigType = "DES_HOG";
+    }
+}
+
 // Find best matches for keypoints in two camera images based on several matching methods
 void Matching2D::MatchDescriptors(std::vector<cv::KeyPoint> &kPtsSource, std::vector<cv::KeyPoint> &kPtsRef,
                                   cv::Mat &descSource, cv::Mat &descRef,
-                                  std::vector<cv::DMatch> &matches, const std::string& descriptorType,
-                                  const std::string& matcherType, const std::string& selectorType) {
+                                  std::vector<cv::DMatch> &matches) {
     // configure matcher
     bool crossCheck = false;
     cv::Ptr<cv::DescriptorMatcher> matcher;
 
     int normType = cv::NORM_HAMMING;
-    if (descriptorType == "DES_HOG") {
+    if (descriptorBigType == "DES_HOG") {
         normType = cv::NORM_L2;
     }
 
     if (matcherType == "MAT_BF") {
         matcher = cv::BFMatcher::create(normType, crossCheck);
     } else if (matcherType == "MAT_FLANN") {
-        if (descriptorType == "DES_HOG") {
+        if (descriptorBigType == "DES_HOG") {
             matcher = cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
-        } else if (descriptorType == "DES_BINARY") {
+        } else if (descriptorBigType == "DES_BINARY") {
             matcher = cv::makePtr<cv::FlannBasedMatcher>(
                     cv::makePtr<cv::flann::LshIndexParams>(12,20, 2));
         }
@@ -44,11 +67,12 @@ void Matching2D::MatchDescriptors(std::vector<cv::KeyPoint> &kPtsSource, std::ve
             }
         }
     }
+    // matches number is the last column.
+    outputCSV << matches.size() << "\n";
 }
 
 // Use one of several types of state-of-art descriptors to uniquely identify keypoints
-void Matching2D::DescKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descriptors,
-                               const std::string& descriptorType) {
+void Matching2D::DescKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img, cv::Mat &descriptors) {
     // select appropriate descriptor
     cv::Ptr<cv::DescriptorExtractor> extractor;
     if (descriptorType =="BRISK") {
@@ -106,6 +130,7 @@ void Matching2D::DescKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &im
     extractor->compute(img, keypoints, descriptors);
     t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
     std::cout << descriptorType << " descriptor extraction in " << 1000 * t / 1.0 << " ms" << std::endl;
+    outputCSV << 1000*t/1.0 << ",";
 }
 
 // Detect keypoints in image using the traditional Shi-Thomasi detector
@@ -122,8 +147,8 @@ void Matching2D::DetKeypointsShiTomasi(std::vector<cv::KeyPoint> &keypoints, cv:
     double k = 0.04;
 
     // Apply corner detection
-    double t = cv::getTickCount();
     std::vector<cv::Point2f> corners;
+    double t = cv::getTickCount();
     cv::goodFeaturesToTrack(img, corners, maxCorners, qualityLevel, minDistance, cv::Mat(), blockSize,
                             false, k);
 
@@ -137,8 +162,10 @@ void Matching2D::DetKeypointsShiTomasi(std::vector<cv::KeyPoint> &keypoints, cv:
     t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
     std::cout << "Shi-Tomasi detection with n=" << keypoints.size() << " keypoints in "
               << 1000 * t / 1.0 << " ms\n";
+    outputCSV << keypoints.size() << "," << 1000*t/1.0 << ",";
 }
 
+// https://docs.opencv.org/4.1.0/d4/d7d/tutorial_harris_detector.html
 void Matching2D::DetKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img) {
     // Detector parameters
     int blockSize = 2;     // for every pixel, a blockSize × blockSize neighborhood is considered
@@ -149,12 +176,12 @@ void Matching2D::DetKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Ma
     // Detect Harris corners and normalize output
     cv::Mat dst, dst_norm, dst_norm_scaled;
     dst = cv::Mat::zeros(img.size(), CV_32FC1);
+    double t = cv::getTickCount();
     cv::cornerHarris(img, dst, blockSize, apertureSize, k, cv::BORDER_DEFAULT);
     cv::normalize(dst, dst_norm, 0, 255, cv::NORM_MINMAX, CV_32FC1, cv::Mat());
     cv::convertScaleAbs(dst_norm, dst_norm_scaled);
 
     // Look for prominent corners and instantiate keypoints
-    double maxOverlap = 0.0; // max. permissible overlap between two features in %, used during non-maxima suppression
     for (size_t j = 0; j < dst_norm.rows; j++) {
         for (size_t i = 0; i < dst_norm.cols; i++) {
             int response = (int)dst_norm.at<float>(j, i);
@@ -163,32 +190,18 @@ void Matching2D::DetKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Ma
                 newKeyPoint.pt = cv::Point2f(i, j);
                 newKeyPoint.size = 2 * apertureSize;
                 newKeyPoint.response = response;
-
-                // perform non-maximum suppression (NMS) in local neighbourhood around new key point
-                bool bOverlap = false;
-                for (auto& keypoint : keypoints) {
-                    double kptOverlap = cv::KeyPoint::overlap(newKeyPoint, keypoint);
-                    if (kptOverlap > maxOverlap) {
-                        bOverlap = true;
-                        if (newKeyPoint.response > keypoint.response) {
-                            // if overlap is >t AND response is higher for new kpt
-                            keypoint = newKeyPoint; // replace old key point with new one
-                            break;             // quit loop over keypoints
-                        }
-                    }
-                }
-                if (!bOverlap) {
-                    // only add new key point if no overlap has been found in previous NMS
-                    keypoints.push_back(newKeyPoint); // store new keypoint in dynamic list
-                }
+                keypoints.push_back(newKeyPoint); // store new keypoint in dynamic list
             }
         } // eof loop over cols
     }     // eof loop over rows
+    t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
+    std::cout << "Harris corner detection with n=" << keypoints.size() << " keypoints in "
+              << 1000 * t / 1.0 << " ms\n";
+    outputCSV << keypoints.size() << "," << 1000*t/1.0 << ",";
 }
 
 // Refer to https://docs.opencv.org/4.1.0/d0/d13/classcv_1_1Feature2D.html
-void Matching2D::DetKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img,
-                                    const std::string& detectorType){
+void Matching2D::DetKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img){
     // cv::FeatureDetector and cv::DescriptorExtractor are the same. Both are aliases of cv::Feature2D.
     cv::Ptr<cv::FeatureDetector> detector;
     if (detectorType == "FAST") {
@@ -242,10 +255,10 @@ void Matching2D::DetKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Ma
     detector->detect(img, keypoints);
     t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
     std::cout << detectorType << " with n= " << keypoints.size() << " keypoints in " << 1000 * t / 1.0 << " ms\n";
+    outputCSV << keypoints.size() << "," << 1000*t/1.0 << ",";
 }
 
-void Matching2D::DisplayKeypoints(std::vector<cv::KeyPoint>& keypoints, cv::Mat& img,
-                                  const std::string& detectorType){
+void Matching2D::DisplayKeypoints(std::vector<cv::KeyPoint>& keypoints, cv::Mat& img){
     cv::Mat visImage = img.clone();
     cv::drawKeypoints(img, keypoints, visImage, cv::Scalar::all(-1),
                       cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
@@ -275,4 +288,14 @@ void Matching2D::CropKeypoints(const cv::Rect &rect, std::vector<cv::KeyPoint> &
     keypoints.erase(std::remove_if(keypoints.begin(), keypoints.end(),
                                    [&](const cv::KeyPoint& keyPoint){return !rect.contains(keyPoint.pt);}),
                     keypoints.end());
+}
+
+void Matching2D::DetectKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img) {
+    if (detectorType == "SHITOMASI") {
+        DetKeypointsShiTomasi(keypoints, img);
+    } else if (detectorType == "HARRIS") {
+        DetKeypointsHarris(keypoints, img);
+    } else {
+        DetKeypointsModern(keypoints, img);
+    }
 }

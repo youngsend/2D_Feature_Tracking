@@ -19,13 +19,13 @@
 /* MAIN PROGRAM */
 int main(int argc, const char *argv[])
 {
-    std::string detectorType = "ORB";
+    std::string detectorType = "ORB"; // SHITOMASI, HARRIS, FAST, BRISK, ORB, AKAZE, SIFT
     std::string descriptorType = "ORB"; // BRIEF, ORB, FREAK, AKAZE, SIFT
-    std::string matcherType = "MAT_FLANN";        // MAT_BF, MAT_FLANN
+    std::string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
     std::string selectorType = "SEL_KNN";       // SEL_NN, SEL_KNN
 
     /* INIT VARIABLES AND DATA STRUCTURES */
-    Matching2D matching2D;
+    Matching2D matching2D(detectorType, descriptorType, matcherType, selectorType);
 
     // data location
     std::string dataPath = "../";
@@ -83,13 +83,7 @@ int main(int argc, const char *argv[])
         /// selection based on detectorType
         //// -> HARRIS, FAST, BRISK, ORB, AKAZE, SIFT
 
-        if (detectorType == "SHITOMASI") {
-            matching2D.DetKeypointsShiTomasi(keypoints, imgGray);
-        } else if (detectorType == "HARRIS") {
-            matching2D.DetKeypointsHarris(keypoints, imgGray);
-        } else {
-            matching2D.DetKeypointsModern(keypoints, imgGray, detectorType);
-        }
+        matching2D.DetectKeypoints(keypoints, imgGray);
 
         //// TASK MP.3 -> only keep keypoints on the preceding vehicle
 
@@ -98,7 +92,7 @@ int main(int argc, const char *argv[])
         cv::Rect vehicleRect(535, 180, 180, 150);
         // this cropping should be disabled finally when fusing with lidar point cloud.
         matching2D.CropKeypoints(vehicleRect, keypoints);
-//        matching2D.DisplayKeypoints(keypoints, img, detectorType);
+//        matching2D.DisplayKeypoints(keypoints, img);
 
         // optional : limit number of keypoints (helpful for debugging and learning)
         bool bLimitKpts = false;
@@ -125,8 +119,7 @@ int main(int argc, const char *argv[])
 
         cv::Mat descriptors;
         matching2D.DescKeypoints(dataBuffer[current_index].keypoints,
-                                 dataBuffer[current_index].cameraImg, descriptors,
-                                 descriptorType);
+                                 dataBuffer[current_index].cameraImg, descriptors);
 
         // push descriptors for current frame to end of data buffer
         dataBuffer[current_index].descriptors = descriptors;
@@ -140,16 +133,6 @@ int main(int argc, const char *argv[])
             /* MATCH KEYPOINT DESCRIPTORS */
 
             std::vector<cv::DMatch> matches;
-            std::string binaryOrHogDescriptor;
-            if (descriptorType == "BRISK" ||
-                descriptorType == "BRIEF" ||
-                descriptorType == "ORB" ||
-                descriptorType == "FREAK" ||
-                descriptorType == "AKAZE") {
-                binaryOrHogDescriptor = "DES_BINARY";
-            } else {
-                binaryOrHogDescriptor = "DES_HOG";
-            }
 
             //// TASK MP.5 -> add FLANN matching in file matching2D.cpp
             //// TASK MP.6 -> add KNN match selection and perform descriptor distance ratio filtering with
@@ -158,7 +141,7 @@ int main(int argc, const char *argv[])
             matching2D.MatchDescriptors(dataBuffer[last_index].keypoints, dataBuffer[current_index].keypoints,
                                         dataBuffer[last_index].descriptors,
                                         dataBuffer[current_index].descriptors,
-                                        matches, binaryOrHogDescriptor, matcherType, selectorType);
+                                        matches);
 
             // store matches in current data frame
             dataBuffer[current_index].kptMatches = matches;
@@ -166,7 +149,7 @@ int main(int argc, const char *argv[])
             std::cout << "#4 : MATCH KEYPOINT DESCRIPTORS done\n";
 
             // visualize matches between current and previous image
-            matching2D.DisplayMatches(dataBuffer[current_index], dataBuffer[last_index], matches);
+//            matching2D.DisplayMatches(dataBuffer[current_index], dataBuffer[last_index], matches);
         }
 
     } // eof loop over all images
