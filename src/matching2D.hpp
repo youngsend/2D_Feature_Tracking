@@ -25,7 +25,7 @@ public:
                         std::string descriptorType = "ORB",
                         std::string matcherType = "MAT_BF",
                         std::string selectorType = "SEL_KNN");
-    ~Matching2D() = default;
+    ~Matching2D();
 
     // keypoint detector
     void DetectKeypoints(std::vector<cv::KeyPoint> &keypoints, cv::Mat &img);

@@ -14,7 +14,7 @@ Matching2D::Matching2D(std::string detectorType, std::string descriptorType, std
     std::string csv_path = "../csv/";
     std::string csv_name = Matching2D::detectorType + "_" + Matching2D::descriptorType + ".csv";
     outputCSV.open(csv_path + csv_name);
-    outputCSV << "keypoints number, detection time(ms), descriptor extraction time(ms), matches number\n";
+    outputCSV << "keypoints number, detection time(ms), descriptor extraction time(ms), matches number";
 
     // decide whether the descriptor is binary or hog, needed in MatchDescriptors.
     if (descriptorType == "BRISK" ||
@@ -26,6 +26,10 @@ Matching2D::Matching2D(std::string detectorType, std::string descriptorType, std
     } else {
         descriptorBigType = "DES_HOG";
     }
+}
+
+Matching2D::~Matching2D() {
+    outputCSV.close();
 }
 
 // Find best matches for keypoints in two camera images based on several matching methods
@@ -68,7 +72,7 @@ void Matching2D::MatchDescriptors(std::vector<cv::KeyPoint> &kPtsSource, std::ve
         }
     }
     // matches number is the last column.
-    outputCSV << matches.size() << "\n";
+    outputCSV << matches.size();
 }
 
 // Use one of several types of state-of-art descriptors to uniquely identify keypoints
@@ -162,7 +166,7 @@ void Matching2D::DetKeypointsShiTomasi(std::vector<cv::KeyPoint> &keypoints, cv:
     t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
     std::cout << "Shi-Tomasi detection with n=" << keypoints.size() << " keypoints in "
               << 1000 * t / 1.0 << " ms\n";
-    outputCSV << keypoints.size() << "," << 1000*t/1.0 << ",";
+    outputCSV << "\n" << keypoints.size() << "," << 1000*t/1.0 << ",";
 }
 
 // https://docs.opencv.org/4.1.0/d4/d7d/tutorial_harris_detector.html
@@ -197,7 +201,7 @@ void Matching2D::DetKeypointsHarris(std::vector<cv::KeyPoint> &keypoints, cv::Ma
     t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
     std::cout << "Harris corner detection with n=" << keypoints.size() << " keypoints in "
               << 1000 * t / 1.0 << " ms\n";
-    outputCSV << keypoints.size() << "," << 1000*t/1.0 << ",";
+    outputCSV << "\n" << keypoints.size() << "," << 1000*t/1.0 << ",";
 }
 
 // Refer to https://docs.opencv.org/4.1.0/d0/d13/classcv_1_1Feature2D.html
@@ -255,7 +259,7 @@ void Matching2D::DetKeypointsModern(std::vector<cv::KeyPoint> &keypoints, cv::Ma
     detector->detect(img, keypoints);
     t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
     std::cout << detectorType << " with n= " << keypoints.size() << " keypoints in " << 1000 * t / 1.0 << " ms\n";
-    outputCSV << keypoints.size() << "," << 1000*t/1.0 << ",";
+    outputCSV << "\n" << keypoints.size() << "," << 1000*t/1.0 << ",";
 }
 
 void Matching2D::DisplayKeypoints(std::vector<cv::KeyPoint>& keypoints, cv::Mat& img){
